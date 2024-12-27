@@ -29,7 +29,7 @@ curl https://pastecode.x10.mx | bash -s -- --termux
 
 **If your distribution is different from Ubuntu 24 or lower GLIBC_2.39 consider building from source**
 
-+ **1. Install the latest version of Rust**
++ **1. Install the latest version of [Rust](https://www.rust-lang.org/tools/install)**
 + **2. Clone this repository**
 + **3. run `cargo build --release`**
 
