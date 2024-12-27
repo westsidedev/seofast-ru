@@ -24,6 +24,14 @@ curl https://pastecode.x10.mx | bash -s -- --termux
 + **Windows**
 
   **Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
+  
+<h2>BUILD:</h2>
+
+**If your distribution is different from Ubuntu 24 or lower GLIBC_2.39 consider building from source**
+
++ **1. Install the latest version of Rust**
++ **2. Clone this repository**
++ **3. run `cargo build --release`**
 
 <h2>COMMANDS:</h5>
 
