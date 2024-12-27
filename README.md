@@ -23,7 +23,7 @@ curl https://pastecode.x10.mx | bash -s -- --termux
 ```
 + **Windows**
 
-  **Go to the release page, or click [here](https)**
+  **Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
 
 <h2>COMMANDS:</h5>
 
