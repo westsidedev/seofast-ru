@@ -130,7 +130,7 @@ impl Print {
 
     pub async fn pause() {
         let colors = Colors::new().await;
-        for i in 900..=1 {
+        for i in (1..=900).rev() {
             print!(
                 "\r\x1b[K{}[{}PAUSED{}]({}{}{})",
                 colors.GREEN, colors.YELLOW, colors.GREEN, colors.YELLOW, i, colors.GREEN
