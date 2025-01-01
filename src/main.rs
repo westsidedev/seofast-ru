@@ -22,20 +22,17 @@ async fn main() {
                 "--passw" => (),
                 _ => msg_help().await,
             }
-            match arg[4].as_str() {
-                "--browser" => (),
-                _ => msg_help().await,
-            }
-            let mode = match arg[6].as_str() {
+
+            let mode = match arg[4].as_str() {
                 "--YT" | "--yt" => Mode::YOUTUBE,
                 "--SF" | "--sf" => Mode::SURFING,
                 "--All" => Mode::ALL,
                 _ => todo!(),
             };
-            let _ = UserData::create(&arg[1], &arg[3], "", "", &arg[5]).await;
+            let _ = UserData::create(&arg[1], &arg[3], "", "").await;
             let mut headless = false;
-            if arg.len() == 8 {
-                if arg[7].contains("--headless") {
+            if arg.len() == 6 {
+                if arg[5].contains("--headless") {
                     headless = true;
                 }
             }
