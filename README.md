@@ -38,7 +38,6 @@ curl https://pastecode.x10.mx | bash -s -- --termux
 ```
 --email      Email used for login in seofast
 --passw      Password used for login in seofast
---browser    Chrome,Chromium,Brave
 --start      Start software after first execution
 --headless   Active headless mode (OPTIONAL)
 --help       Show this message
@@ -51,7 +50,7 @@ curl https://pastecode.x10.mx | bash -s -- --termux
 **FIRST EXECUTION:**
 
 ```bash
-./seofast-ru --email xxxx@xxxx --passw 123456 --browser brave --YT --headless
+./seofast-ru --email xxxx@xxxx --passw 123456 --YT --headless
 ```
 
 **START**
