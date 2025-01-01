@@ -1,19 +1,17 @@
 use chrono::{TimeZone, Utc};
 use chrono_tz::America::Sao_Paulo;
-use config::{ext::JsonConfigurationExtensions, ConfigurationBuilder, DefaultConfigurationBuilder};
+use config::{ext::*, *};
+use serde::Deserialize;
 use std::{fs, io::Write, path::Path};
 
-use super::browser::BrowserName;
-
-#[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all(deserialize = "PascalCase"))]
 pub struct UserData {
     pub email: String,
     pub password: String,
     pub cookies: String,
     pub proxy: String,
     pub port: String,
-    pub browser: BrowserName,
 }
 
 impl UserData {
@@ -23,36 +21,11 @@ impl UserData {
             .add_json_file(file)
             .build()
             .unwrap();
-        let email = file_json.get("email").unwrap().as_str().to_string();
-        let password = file_json.get("password").unwrap().as_str().to_string();
-        let cookies = file_json.get("cookies").unwrap().as_str().to_string();
-        let proxy = file_json.get("proxy").unwrap().as_str().to_string();
-        let port = file_json.get("port").unwrap().as_str().to_string();
-        let browser = file_json.get("browser").unwrap();
-        let browser = match browser.as_str() {
-            "brave" => BrowserName::Brave,
-            "chrome" => BrowserName::Chrome,
-            "chromium" => BrowserName::Chromium,
-            _ => unimplemented!(),
-        };
-        let user = UserData {
-            email,
-            password,
-            cookies,
-            proxy,
-            port,
-            browser,
-        };
+        let user: UserData = file_json.reify();
         user
     }
 
-    pub async fn create(
-        email: &str,
-        senha: &str,
-        cookies: &str,
-        proxy: &str,
-        browser: &str,
-    ) -> UserData {
+    pub async fn create(email: &str, senha: &str, cookies: &str, proxy: &str) -> UserData {
         if Path::new("config/seofast/userdata.json").exists() {
             let _ = fs::remove_dir_all("config/seofast");
         }
@@ -65,20 +38,14 @@ impl UserData {
             .unwrap();
         let port = "9001";
         let _ = opt.write_all(format!(
-                "{{\n\t\"email\":\"{}\",\n\t\"password\": \"{}\",\n\t\"cookies\": \"{}\",\n\t\"proxy\": \"{}\",\n\t\"port\": \"{}\",\n\t\"browser\": \"{}\"\n}}",
-                    email, senha, cookies, proxy, port, browser
+                "{{\n\t\"email\":\"{}\",\n\t\"password\": \"{}\",\n\t\"cookies\": \"{}\",\n\t\"proxy\": \"{}\",\n\t\"port\": \"{}\"\n}}",
+                    email, senha, cookies, proxy, port
                 ).as_bytes(),
             );
         return UserData::load().await;
     }
 
-    pub async fn modify(
-        email: &str,
-        senha: &str,
-        cookies: &str,
-        proxy: &str,
-        browser: &str,
-    ) -> UserData {
+    pub async fn modify(email: &str, senha: &str, cookies: &str, proxy: &str) -> UserData {
         let path = "config/seofast";
         let _ = fs::remove_file("config/seofast/userdata.json");
         let _ = fs::create_dir(path);
@@ -90,8 +57,8 @@ impl UserData {
             .unwrap();
         let port = "9001";
         let _ = opt.write_all(format!(
-                "{{\n\t\"email\":\"{}\",\n\t\"password\": \"{}\",\n\t\"cookies\": \"{}\",\n\t\"proxy\": \"{}\",\n\t\"port\": \"{}\",\n\t\"browser\": \"{}\"\n}}",
-                email, senha, cookies, proxy, port, browser
+                "{{\n\t\"email\":\"{}\",\n\t\"password\": \"{}\",\n\t\"cookies\": \"{}\",\n\t\"proxy\": \"{}\",\n\t\"port\": \"{}\"\n}}",
+                email, senha, cookies, proxy, port
             ).as_bytes(),
         );
         UserData::load().await

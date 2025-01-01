@@ -7,15 +7,7 @@ use thirtyfour::prelude::*;
 
 use super::config::UserData;
 
-#[derive(PartialEq, Clone)]
-pub enum BrowserName {
-    Brave,
-    Chromium,
-    Chrome,
-}
-
 pub struct Browser {
-    pub name: BrowserName,
     pub headless: bool,
     pub proxy: Option<String>,
     pub port: String,
@@ -24,17 +16,7 @@ pub struct Browser {
 impl Browser {
     pub async fn new(&self) -> WebDriver {
         let path = env::current_dir().unwrap();
-        let user_data_dir = match &self.name {
-            BrowserName::Brave => {
-                format!("--user-data-dir={}/config/seofast/brave", path.display())
-            }
-            BrowserName::Chrome => {
-                format!("--user-data-dir={}/config/seofast/chrome", path.display())
-            }
-            BrowserName::Chromium => {
-                format!("--user-data-dir={}/config/seofast/chromium", path.display())
-            }
-        };
+        let user_data_dir = format!("--user-data-dir={}/config/seofast/brave", path.display());
 
         let mut args = vec![
             "--ignore-certificate-errors-spki-list",
@@ -113,29 +95,15 @@ impl Browser {
         //so it is not necessary to indicate the browser path
         if std::env::consts::ARCH.contains("x86_64") {
             if std::env::consts::OS.contains("linux") {
-                let _ = match self.name {
-                    BrowserName::Brave => caps.set_binary("/bin/brave"),
-                    BrowserName::Chrome => caps.set_binary("/bin/chrome"),
-                    BrowserName::Chromium => caps.set_binary("/bin/chromium"),
-                };
+                let _ = caps.set_binary("/bin/brave");
             }
         }
 
         if std::env::consts::OS.contains("windows") {
-            let _ = match self.name {
-                BrowserName::Brave => caps.set_binary(&format!(
-                    "{}/config/browser/brave/brave.exe",
-                    path.display()
-                )),
-                BrowserName::Chrome => caps.set_binary(&format!(
-                    "{}/config/browser/chrome/chrome.exe",
-                    path.display()
-                )),
-                BrowserName::Chromium => caps.set_binary(&format!(
-                    "{}/config/browser/chromium/chromium.exe",
-                    path.display()
-                )),
-            };
+            let _ = caps.set_binary(&format!(
+                "{}/config/browser/brave/brave.exe",
+                path.display()
+            ));
         }
 
         let driver = WebDriver::new(format!("http://localhost:{}", &self.port), caps).await;
