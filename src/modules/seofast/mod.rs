@@ -2,6 +2,7 @@ pub mod task;
 
 use std::{
     io::{stdout, Write},
+    sync::atomic::Ordering,
     time::Duration,
 };
 
@@ -11,7 +12,7 @@ use regex::Regex;
 use task::ThreadTaskSeofast;
 use tokio::time::sleep;
 
-use crate::modules::colors::Colors;
+use crate::{modules::colors::Colors, GLOBAL_CONTROL};
 
 #[allow(dead_code)]
 pub enum Mode {
@@ -131,6 +132,9 @@ impl Print {
     pub async fn pause() {
         let colors = Colors::new().await;
         for i in (1..=900).rev() {
+            if GLOBAL_CONTROL.load(Ordering::Relaxed) {
+                break;
+            }
             print!(
                 "\r\x1b[K{}[{}PAUSED{}]({}{}{})",
                 colors.GREEN, colors.YELLOW, colors.GREEN, colors.YELLOW, i, colors.GREEN
