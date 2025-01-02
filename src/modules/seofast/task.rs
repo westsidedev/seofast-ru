@@ -355,7 +355,7 @@ impl TaskDriverSeofast {
         .await;
 
         if !new_mode {
-            if surf_ckick.as_ref().unwrap().len() == 0 {
+            if surf_ckick.as_ref().unwrap().len() <= 1 {
                 return TaskResult::CONTINUE;
             }
             let _ = surf_ckick.unwrap()[1].click().await;
