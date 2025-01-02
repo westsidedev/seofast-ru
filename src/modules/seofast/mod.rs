@@ -131,7 +131,7 @@ impl Print {
 
     pub async fn pause() {
         let colors = Colors::new().await;
-        for i in (1..=900).rev() {
+        for i in (1..=600).rev() {
             if GLOBAL_CONTROL.load(Ordering::Relaxed) {
                 break;
             }
