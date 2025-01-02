@@ -31,6 +31,7 @@ impl UserData {
         }
         let path = "config/seofast";
         let _ = fs::create_dir_all(path);
+        let _ = fs::create_dir_all("config/seofast/screenshot");
         let mut opt = fs::OpenOptions::new()
             .write(true)
             .create(true)
