@@ -7,12 +7,12 @@ use std::{
 };
 
 use regex::Regex;
-use thirtyfour::{error::WebDriverErrorInner, prelude::*};
+use thirtyfour::prelude::*;
 use tokio::{signal::ctrl_c, spawn, time::sleep};
 
 use crate::{
     modules::{
-        browser::{start_driver, Browser, BrowserName},
+        browser::{start_driver, Browser},
         config::{Log, UserData},
     },
     GLOBAL_CONTROL,
@@ -20,9 +20,7 @@ use crate::{
 
 use super::Print;
 
-#[allow(non_camel_case_types)]
 enum TaskResult {
-    LOGIN_ERROR,
     QUIT,
     CRITICAL,
     OK,
@@ -48,115 +46,95 @@ impl TaskDriverSeofast {
         let user = UserData::load().await;
         Log::debug("TaskDriverSeofast-LOGIN", &user.port).await;
         let browser = Browser {
-            name: user.browser.clone(),
             headless: self.headless,
             proxy: Some(user.proxy.clone()),
             port: user.port,
         };
 
-        let browser_name = match user.browser {
-            BrowserName::Brave => "brave",
-            BrowserName::Chrome => "chrome",
-            BrowserName::Chromium => "chromium",
-        };
-
         let driver = browser.new().await;
+
         sleep(Duration::from_secs(4)).await;
 
         let _ = driver.set_page_load_timeout(Duration::from_secs(15)).await;
-        let _ = match driver.get("https://seo-fast.ru/login").await {
-            Ok(_) => (),
-            Err(e) => {
+        if let Err(e) = driver.get("https://seo-fast.ru/login").await {
+            Log::error(
+                "TaskDriverSeofast->LOGIN",
+                &format!("line:{}\n{}", line!(), e),
+            )
+            .await;
+        }
+
+        sleep(Duration::from_secs(4)).await;
+        if user.cookies.is_empty() {
+            let logusername = driver.find(By::Id("logusername")).await;
+            if let Err(e) = logusername {
+                let _ = driver.quit().await;
                 Log::error(
                     "TaskDriverSeofast->LOGIN",
                     &format!("line:{}\n{}", line!(), e),
                 )
                 .await;
-                ()
+                return Err(e);
             }
-        };
-
-        sleep(Duration::from_secs(4)).await;
-        if user.cookies.is_empty() {
-            match driver.find(By::Id("logusername")).await {
-                Ok(elm_username) => elm_username.send_keys(&user.email).await?,
-                Err(e) => {
-                    let _ = driver.quit().await;
-                    Log::error(
-                        "TaskDriverSeofast->LOGIN",
-                        &format!("element logusername not found\n{}", e),
-                    )
-                    .await;
-                    return Err(e);
-                }
-            }
+            let _ = logusername.unwrap().send_keys(&user.email).await?;
 
             sleep(Duration::from_secs(2)).await;
-            match driver.find(By::Id("logpassword")).await {
-                Ok(elm_passw) => elm_passw.send_keys(&user.password).await?,
-                Err(e) => {
-                    let _ = driver.quit().await;
-                    Log::error(
-                        "TaskDriverSeofast->LOGIN",
-                        &format!("element logpassword not found\n{}", e),
-                    )
-                    .await;
-                    return Err(e);
-                }
+
+            let logpassw = driver.find(By::Id("logpassword")).await;
+            if let Err(e) = logpassw {
+                let _ = driver.quit().await;
+                Log::error(
+                    "TaskDriverSeofast->LOGIN",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                return Err(e);
             }
+            let _ = logpassw.unwrap().send_keys(&user.password).await?;
 
             sleep(Duration::from_secs(2)).await;
-            match driver.find(By::ClassName("sf_button")).await {
-                Ok(elm_login) => elm_login.click().await?,
-                Err(e) => {
-                    let _ = driver.quit().await;
-                    Log::error(
-                        "TaskDriverSeofast->LOGIN",
-                        &format!("element sf_button not found\n{}", e),
-                    )
-                    .await;
-                    return Err(e);
-                }
+
+            let sf_button = driver.find(By::ClassName("sf_button")).await;
+            if let Err(e) = sf_button {
+                let _ = driver.quit().await;
+                Log::error(
+                    "TaskDriverSeofast->LOGIN",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                return Err(e);
+            }
+            let _ = sf_button.unwrap().click().await?;
+
+            let head_info = driver.wait_element(By::ClassName("head_info_b"), 15).await;
+            if let Err(e) = head_info {
+                let _ = driver.quit().await;
+                Log::error(
+                    "TaskDriverSeofast->LOGIN",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                return Err(e);
             }
 
-            let _ = match driver.wait_element(By::ClassName("head_info_b"), 15).await {
-                Ok(_) => {
-                    if let Ok(cookies) = driver.get_all_cookies().await {
-                        let mut cookie_format = String::new();
-                        for cookie in cookies {
-                            if cookie.name.contains("googtrans") {
-                                continue;
-                            } else {
-                                cookie_format.push_str(
-                                    format!("{}={}; ", cookie.name, cookie.value).as_str(),
-                                );
-                            }
-                        }
-                        let _ = UserData::modify(
-                            &user.email,
-                            &user.password,
-                            &cookie_format,
-                            &user.proxy,
-                            &browser_name,
-                        )
-                        .await;
-                        return Ok(driver);
+            if let Ok(cookies) = driver.get_all_cookies().await {
+                let mut cookie_format = String::new();
+                for cookie in cookies {
+                    if cookie.name.contains("googtrans") {
+                        continue;
+                    } else {
+                        cookie_format
+                            .push_str(format!("{}={}; ", cookie.name, cookie.value).as_str());
                     }
                 }
-                Err(e) => {
-                    let _ = driver.quit().await;
-                    Log::error(
-                        "TaskDriverSeofast->LOGIN",
-                        &format!("element head_info_b not found\n{}", e),
-                    )
+                let _ = UserData::modify(&user.email, &user.password, &cookie_format, &user.proxy)
                     .await;
-                    return Err(e);
-                }
-            };
+                return Ok(driver);
+            }
         }
+
         for cookies in user.cookies.split("; ") {
             let cookie: Vec<&str> = cookies.split("=").collect();
-            //println!("{}", cookies);
             if cookie.len() <= 1 {
                 continue;
             } else {
@@ -164,102 +142,61 @@ impl TaskDriverSeofast {
                 ck.set_domain("seo-fast.ru");
                 ck.set_same_site(SameSite::Lax);
                 ck.set_path("/");
-                match driver.add_cookie(ck).await {
-                    Ok(_) => (),
-                    Err(e) => return Err(e),
+                if let Err(e) = driver.add_cookie(ck).await {
+                    return Err(e);
                 }
             }
         }
-        let _ = match driver.get("https://seo-fast.ru").await {
-            Ok(_) => (),
-            Err(e) => {
-                let _ = driver.quit().await;
-                Log::error(
-                    "TaskDriverSeofast->LOGIN",
-                    &format!("line:{}\n{}", line!(), e),
-                )
-                .await;
-                return Err(e);
-                //continue;
-            }
-        };
-
-        match driver.wait_element(By::ClassName("head_info_b"), 15).await {
-            Ok(_) => return Ok(driver),
-            Err(e) => {
-                let _ = driver.quit().await;
-                let _ =
-                    UserData::modify(&user.email, &user.password, "", &user.proxy, &browser_name)
-                        .await;
-                Log::error(
-                    "TaskDriverSeofast->LOGIN",
-                    &format!("line:{}\n{}", line!(), e),
-                )
-                .await;
-                return Err(e);
-            }
+        if let Err(e) = driver.get("https://seo-fast.ru").await {
+            let _ = driver.quit().await;
+            return Err(e);
         }
+
+        let head_info = driver.wait_element(By::ClassName("head_info_b"), 15).await;
+        if let Err(e) = head_info {
+            let _ = driver.quit().await;
+            let _ = UserData::modify(&user.email, &user.password, "", &user.proxy).await;
+            return Err(e);
+        }
+        return Ok(driver);
     }
 
     async fn youtube(driver: WebDriver, task_number: &str) -> TaskResult {
-        let _ = driver.set_page_load_timeout(Duration::from_secs(10)).await;
-        let _ = match driver.goto("https://seo-fast.ru/work_youtube?all").await {
-            Ok(_) => (),
-            Err(e) => match e.as_inner() {
-                WebDriverErrorInner::Timeout(e) => {
-                    Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await
-                }
-                WebDriverErrorInner::WebDriverTimeout(e) => {
-                    Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await
-                }
-                _ => Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await,
-            },
+        let _ = driver.set_page_load_timeout(Duration::from_secs(20)).await;
+        let goto = driver.goto("https://seo-fast.ru/work_youtube?all").await;
+        if let Err(e) = goto {
+            Log::error(
+                "TaskDriverSeofast->YOUTUBE",
+                &format!("line:{}\n{}", line!(), e),
+            )
+            .await;
+            return TaskResult::CONTINUE;
         };
-        let username = match driver.find(By::ClassName("head_info_b")).await {
-            Ok(head_info) => match head_info.find(By::Tag("a")).await {
-                Ok(a) => match a.text().await {
-                    Ok(txt) => txt,
-                    Err(_) => return TaskResult::LOGIN_ERROR,
-                },
-                Err(e) => {
-                    Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                    return TaskResult::CONTINUE;
-                }
-            },
-            Err(e) => {
-                Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                return TaskResult::LOGIN_ERROR;
-            }
-        };
-        let money = match driver.find(By::ClassName("main_balance")).await {
-            Ok(balance) => match balance.find_all(By::Tag("div")).await {
-                Ok(list_div) => match list_div[2].find(By::Tag("span")).await {
-                    Ok(span) => match span.text().await {
-                        Ok(span_txt) => span_txt,
-                        Err(_) => return TaskResult::CONTINUE,
-                    },
-                    Err(e) => {
-                        Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                        return TaskResult::CONTINUE;
-                    }
-                },
-                Err(e) => {
-                    Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                    return TaskResult::CONTINUE;
-                }
-            },
-            Err(e) => {
-                Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                return TaskResult::LOGIN_ERROR;
-            }
-        };
-        let classification = match driver.find(By::ClassName("ratingcss2")).await {
-            Ok(rating) => rating.text().await.unwrap(),
-            Err(e) => {
-                Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                return TaskResult::LOGIN_ERROR;
-            }
-        };
+        let mut username = String::new();
+        let mut money = String::new();
+        let mut classification = String::new();
+        //
+        let head_info_b = driver.find(By::ClassName("head_info_b")).await;
+        if let Err(e) = head_info_b {
+            Log::error(
+                "TaskDriverSeofast->YOUTUBE",
+                &format!("line:{}\n{}", line!(), e),
+            )
+            .await;
+            return TaskResult::CRITICAL;
+        }
+        let head_elem = head_info_b.unwrap();
+        let a = head_elem.find(By::Tag("a")).await;
+        let _ = username.push_str(&a.unwrap().text().await.unwrap());
+        //
+        let main_balance = driver.find(By::ClassName("main_balance")).await.unwrap();
+        let balance_divs = main_balance.find_all(By::Tag("div")).await;
+        let balance_span = balance_divs.unwrap()[2].find(By::Tag("span")).await;
+        let _ = money.push_str(&balance_span.unwrap().text().await.unwrap());
+        //
+        let ratingcss2 = driver.find(By::ClassName("ratingcss2")).await.unwrap();
+        let _ = classification.push_str(&ratingcss2.text().await.unwrap());
+        //
         let re_classi = Regex::new(r"([0-9]+)").unwrap();
         let re_money = Regex::new(r"(\d\d\d.\d\d\d\d|\d\d.\d\d\d\d|\d.\d\d\d\d|\d)").unwrap();
         let money = re_money.captures(&money).unwrap();
@@ -273,220 +210,173 @@ impl TaskDriverSeofast {
             money,
         };
         p.user().await;
-        let tab_origin = match driver.window().await {
-            Ok(tab) => tab,
-            Err(e) => {
-                Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                return TaskResult::CONTINUE;
-            }
-        };
+        let tab_origin = driver.window().await.unwrap();
 
-        let rek_table = match driver.find_all(By::ClassName("list_rek_table")).await {
-            Ok(elm) => {
-                if elm.len() < 3 {
-                    return TaskResult::CONTINUE;
-                }
-                match elm[2].find(By::Tag("tbody")).await {
-                    Ok(tbody) => tbody,
-                    Err(e) => {
-                        Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                        return TaskResult::PAUSE;
-                    }
-                }
-            }
-            Err(e) => {
-                Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                return TaskResult::PAUSE;
-            }
-        };
+        let rek_table = driver.find_all(By::ClassName("list_rek_table")).await;
+        if let Err(e) = rek_table {
+            Log::error(
+                "TaskDriverSeofast->YOUTUBE",
+                &format!("line:{}\n{}", line!(), e),
+            )
+            .await;
+            return TaskResult::PAUSE;
+        }
+
+        if rek_table.as_ref().unwrap().len() < 3 {
+            return TaskResult::CONTINUE;
+        }
+
+        let tbody = rek_table.unwrap()[2].find(By::Tag("tbody")).await;
+        if let Err(e) = tbody {
+            Log::error(
+                "TaskDriverSeofast->YOUTUBE",
+                &format!("line:{}\n{}", line!(), e),
+            )
+            .await;
+            return TaskResult::PAUSE;
+        }
+
         let mut id_yt = String::new();
-        let task = match rek_table.find_all(By::Tag("tr")).await {
-            Ok(list_tr) => {
-                Log::info(
-                    "TaskDriverSeofast->YOUTUBE",
-                    &format!(
-                        "line:{}\ntxt tag tr[0]: {}",
-                        line!(),
-                        list_tr[0].text().await.unwrap()
-                    ),
-                )
+        let list_tr = tbody.unwrap().find_all(By::Tag("tr")).await;
+        if let Err(e) = list_tr {
+            Log::error(
+                "TaskDriverSeofast->YOUTUBE",
+                &format!("line:{}\n{}", line!(), e),
+            )
+            .await;
+            return TaskResult::PAUSE;
+        }
+
+        let mut list_elem_trash = Vec::new();
+
+        for tr_elem in list_tr.as_ref().unwrap() {
+            let tr_id = tr_elem.id().await;
+            if let Some(id) = tr_id.unwrap() {
+                if id.contains("youtube_v") {
+                    list_elem_trash.push(tr_elem.to_owned());
+                }
+            }
+        }
+
+        for elem_trash in list_elem_trash {
+            if let Ok(_) = elem_trash.find(By::ClassName("youtube_l")).await {
+                if let Some(txt) = elem_trash.id().await.unwrap() {
+                    let id_trash = txt.replace("youtube_v", "");
+                    let _ = driver
+                        .execute(
+                            format!("st_task_youtube('{}', '2');", &id_trash),
+                            Vec::new(),
+                        )
+                        .await;
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+
+            if let Ok(_) = elem_trash.find(By::ClassName("youtube_s")).await {
+                if let Some(txt) = elem_trash.id().await.unwrap() {
+                    let id_trash = txt.replace("youtube_v", "");
+                    let _ = driver
+                        .execute(
+                            format!("st_task_youtube('{}', '1');", &id_trash),
+                            Vec::new(),
+                        )
+                        .await;
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+
+        let tr_title = list_tr.as_ref().unwrap()[0].text().await.unwrap();
+
+        let tr = list_tr.unwrap()[1].to_owned();
+
+        if let Some(txt) = tr.id().await.unwrap() {
+            let id = txt.replace("youtube_v", "");
+            id_yt = id;
+        }
+
+        if tr_title.contains("Оставить комментарий") {
+            return TaskResult::CONTINUE;
+        } else if tr_title.contains("Rutube") {
+            let _ = driver
+                .execute(format!("st_view_youtube('{}');", &id_yt), Vec::new())
                 .await;
-                let txt_tag0 = list_tr[0].text().await.unwrap();
+            sleep(Duration::from_secs(2)).await;
+            return TaskResult::CONTINUE;
+        }
 
-                //task de comentar e etc...
-                if txt_tag0.contains("Оставить комментарий") {
-                    let _ = driver.quit().await;
-                    return TaskResult::PAUSE;
-                }
+        let tds = tr.find_all(By::Tag("td")).await;
+        if let Err(e) = tds {
+            Log::error(
+                "TaskDriverSeofast->YOUTUBE",
+                &format!("line:{}\n{}", line!(), e),
+            )
+            .await;
+            return TaskResult::PAUSE;
+        }
 
-                //paga pouco
-                if txt_tag0.contains("Rutube") || txt_tag0.contains("Подписаться на канал")
-                {
-                    match list_tr[1].attr("id").await {
-                        Ok(id) => {
-                            let id = id.unwrap();
-                            let re = Regex::new(r"([0-9]+)").unwrap();
-                            let id_trash = re.captures(&id).unwrap();
-                            Log::info(
-                                "TaskDriverSeofast->YOUTUBE",
-                                &format!("idtrash: {}", &id_trash[1]),
-                            )
-                            .await;
-                            let _ = driver
-                                .execute(
-                                    format!("st_view_youtube('{}');", &id_trash[1]),
-                                    Vec::new(),
-                                )
-                                .await;
-                            sleep(Duration::from_secs(2)).await;
-                            return TaskResult::CONTINUE;
-                        }
-                        Err(e) => {
-                            Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                            return TaskResult::PAUSE;
-                        }
-                    }
-                }
-                if txt_tag0.contains("Поставить Лайк") {
-                    match list_tr[1].attr("id").await {
-                        Ok(id) => {
-                            let id = id.unwrap();
-                            let re = Regex::new(r"([0-9]+)").unwrap();
-                            let id_trash = re.captures(&id).unwrap();
-                            Log::info(
-                                "TaskDriverSeofast->YOUTUBE",
-                                &format!("idtrash: {}", &id_trash[1]),
-                            )
-                            .await;
-                            let _ = driver
-                                .execute(
-                                    format!("st_task_youtube('{}',2);", &id_trash[1]),
-                                    Vec::new(),
-                                )
-                                .await;
-                            sleep(Duration::from_secs(2)).await;
-                            return TaskResult::CONTINUE;
-                        }
-                        Err(e) => {
-                            Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                            return TaskResult::PAUSE;
-                        }
-                    }
-                }
-                match list_tr[1].attr("id").await {
-                    Ok(id) => {
-                        if let Some(id) = id {
-                            if id.contains("youtube") {
-                                let re = Regex::new(r"([0-9]+)").unwrap();
-                                let id_reg = re.captures(&id).unwrap();
-                                id_yt.push_str(&id_reg[1]);
-                                list_tr[1].to_owned()
-                            } else {
-                                Log::info("TaskDriverSeofast->YOUTUBE", "id not contains youtube")
-                                    .await;
-                                return TaskResult::PAUSE;
-                            }
-                        } else {
-                            Log::info("TaskDriverSeofast->YOUTUBE", "id none").await;
-                            return TaskResult::PAUSE;
-                        }
-                    }
-                    Err(e) => {
-                        Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                        return TaskResult::PAUSE;
-                    }
-                }
-            }
-            Err(e) => {
-                Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                return TaskResult::PAUSE;
-            }
+        let td_span = tds.unwrap()[2].find(By::Tag("span")).await;
+        let video_type = match td_span.unwrap().text().await.unwrap().as_str() {
+            "RARE" => VideoType::RARE,
+            "PREMIUM" => VideoType::PREMIUM,
+            "VIP" => VideoType::VIP,
+            _ => VideoType::NONE,
         };
-        let task_type = match task.find_all(By::Tag("td")).await {
-            Ok(list_td) => match list_td[2].find(By::Tag("span")).await {
-                Ok(span) => match span.text().await.unwrap().as_str() {
-                    "RARE" => VideoType::RARE,
-                    "PREMIUM" => VideoType::PREMIUM,
-                    "VIP" => VideoType::VIP,
-                    _ => VideoType::NONE,
-                },
-                Err(e) => {
-                    Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                    return TaskResult::PAUSE;
-                }
-            },
-            Err(e) => {
-                Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                return TaskResult::PAUSE;
-            }
-        };
-        Log::info("TaskDriverSeofast->YOUTUBE", &format!("{:?}", task_type)).await;
+        Log::info("TaskDriverSeofast->YOUTUBE", &format!("{:?}", video_type)).await;
         let _ = driver.execute("window.scroll(0,400);", Vec::new()).await;
         let _ = driver
-            .screenshot(&Path::new(&"config/seofast/window_1.png"))
+            .screenshot(&Path::new(&"config/seofast/screenshot/window_1.png"))
             .await;
         Log::debug(
             "TaskDriverSeofast->YOUTUBE",
-            &format!("line:{}\n{}", line!(), &task.outer_html().await.unwrap()),
+            &format!("line:{}\n{}", line!(), &tr.outer_html().await.unwrap()),
         )
         .await;
 
-        //check old mode
-        let old_mode = match task.find_all(By::ClassName("surf_ckick")).await {
-            Ok(surf_click) => {
-                match surf_click.len().ge(&2) {
-                    true => {
-                        match surf_click[1].click().await {
-                            Ok(_) => {
-                                let _ = driver
-                                    .screenshot(&Path::new(&"config/seofast/window_1-click.png"))
-                                    .await;
-                                true
-                            }
-                            Err(e) => {
-                                Log::error(
-                                    "TaskDriverSeofast->YOUTUBE",
-                                    &format!("surf_click\n{}", e),
-                                )
-                                .await;
-                                //return TaskResult::PAUSE;
-                                false
-                            }
-                        }
-                    }
-                    false => {
-                        let _ = driver
-                            .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                            .await;
-                        return TaskResult::CONTINUE;
-                    }
-                }
+        Log::debug("TaskDriverSeofast->YOUTUBE", &id_yt).await;
+
+        //check new mode
+        let mut new_mode = false;
+
+        let surf_ckick = tr.find_all(By::ClassName("surf_ckick")).await;
+
+        Log::debug("", &format!("surf-ckick\n{:#?}", surf_ckick)).await;
+
+        if let Ok(elems) = surf_ckick.as_ref() {
+            if elems.len() == 0 {
+                new_mode = true;
             }
-            Err(e) => {
-                Log::error("TaskDriverSeofast->YOUTUBE", &format!("surf_click\n{}", e)).await;
-                //return TaskResult::PAUSE;
-                false
+        }
+
+        Log::debug(
+            "TaskDriverSeofast->YOUTUBE",
+            &format!("new_mode:{:#}", new_mode),
+        )
+        .await;
+
+        if !new_mode {
+            if surf_ckick.as_ref().unwrap().len() == 0 {
+                return TaskResult::CONTINUE;
             }
-        };
+            let _ = surf_ckick.unwrap()[1].click().await;
+            let _ = driver
+                .screenshot(&Path::new(&"config/seofast/screenshot/w_oldmode1-ck.png"))
+                .await;
+        }
+
+        if new_mode {
+            let res_views = driver.find(By::Id(format!("res_views{}", id_yt))).await;
+            let div = res_views.unwrap().find(By::Tag("div")).await;
+            let a = div.unwrap().find(By::Tag("a")).await;
+            let _ = a.unwrap().click().await;
+        }
 
         //check limit video
-        let yt_error: Result<WebElement, ()> =
-            match driver.wait_element(By::ClassName("youtube_error"), 5).await {
-                Ok(yt_error) => Ok(yt_error),
-                Err(e) => {
-                    Log::error(
-                        "TaskDriverSeofast->YOUTUBE",
-                        &format!("line:{}\n{}", line!(), e),
-                    )
-                    .await;
-                    Err(())
-                }
-            };
+        let yt_error = driver.wait_element(By::ClassName("youtube_error"), 5).await;
         if let Ok(elem) = yt_error {
-            let _ = match elem.find(By::Tag("a")).await {
-                Ok(elem) => elem.click().await,
-                Err(_) => Ok(()),
-            };
+            if let Ok(a) = elem.find(By::Tag("a")).await {
+                let _ = a.click().await;
+            }
             let popup = match driver.wait_element(By::Id("popup_content_list"), 15).await {
                 Ok(elem) => elem,
                 Err(e) => {
@@ -512,51 +402,18 @@ impl TaskDriverSeofast {
                 return TaskResult::CONTINUE;
             }
         }
-        let _ = driver
-            .screenshot(&Path::new(&"config/seofast/window_1-click2.png"))
-            .await;
-        //panic!();
-        if !old_mode {
-            //check new mode
-            match task.find_all(By::Tag("td")).await {
-                Ok(list_td) => match list_td[1].find(By::Tag("div")).await {
-                    Ok(div) => match div.attr("id").await {
-                        Ok(_) => true,
-                        Err(e) => {
-                            Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                            //return TaskResult::PAUSE;
-                            false
-                        }
-                    },
-                    Err(e) => {
-                        Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                        //return TaskResult::PAUSE;
-                        false
-                    }
-                },
-                Err(e) => {
-                    Log::error("TaskDriverSeofast->YOUTUBE", &format!("{}", e)).await;
-                    //return TaskResult::PAUSE;
-                    false
-                }
-            };
-        }
+
         let mut tabs = match driver.windows().await {
             Ok(windows) => windows,
             Err(_) => return TaskResult::QUIT,
         };
+
         for i in 0..11 {
-            let _ = Log::debug(
-                "TaskDriverSeofast->YOUTUBE",
-                &format!("tabs:{}", tabs.len()),
-            )
-            .await;
             if tabs.len() > 1 {
                 break;
             }
             tabs = match driver.windows().await {
                 Ok(window) => window,
-                //Err(WebDriverError::HttpError(_)) => return TaskResult::QUIT,
                 Err(_) => return TaskResult::CONTINUE,
             };
             sleep(Duration::from_secs(1)).await;
@@ -567,99 +424,177 @@ impl TaskDriverSeofast {
                 return TaskResult::CONTINUE;
             }
         }
+        let mut tab_video_txt = String::new();
         for i in &tabs {
-            driver.switch_to_window(i.to_owned()).await.unwrap();
-            match driver.current_url().await {
-                Ok(url) => {
-                    if url.as_str().contains("video") {
-                        driver.switch_to_window(i.to_owned()).await.unwrap();
-                        let _ = driver
-                            .screenshot(&Path::new(&"config/seofast/window_2.png"))
-                            .await;
-                        let src = match driver.source().await {
-                            Ok(src) => src,
-                            Err(e) => match e.as_inner() {
-                                WebDriverErrorInner::WebDriverTimeout(_) => {
-                                    let _ = driver.close_window().await;
-                                    let _ = driver.switch_to_window(tab_origin).await;
-                                    return TaskResult::CONTINUE;
-                                }
-                                _ => {
-                                    let _ = driver.close_window().await;
-                                    let _ = driver.switch_to_window(tab_origin).await;
-                                    return TaskResult::CONTINUE;
-                                }
-                            },
-                        };
-                        Log::debug(
-                            "TaskDriverSeofast->YOUTUBE",
-                            &format!("line:{}\n{}", line!(), src),
-                        )
-                        .await;
-                    }
-                }
-                Err(_) => {
-                    let _ = driver.close_window().await;
-                    let _ = driver.switch_to_window(tab_origin).await;
-                    return TaskResult::CONTINUE;
-                }
+            if *i != tab_origin {
+                tab_video_txt = i.to_string();
             }
         }
 
-        sleep(Duration::from_secs(3)).await;
+        let tab_video = WindowHandle::from(tab_video_txt);
 
-        //old mode exec
-        if old_mode {
-            let _ = match driver.wait_element(By::Id("timer-tr-block"), 10).await {
-                Ok(_) => (),
-                Err(e) => {
-                    Log::error(
-                        "TaskDriverSeofast->YOUTUBE",
-                        &format!("line:{}\n{}", line!(), e),
-                    )
+        let tmr_id = match new_mode {
+            true => format!("timer_ads_{}", id_yt),
+            false => "tmr".to_string(),
+        };
+
+        let mut earn = String::new();
+
+        if new_mode {
+            let _ = driver.switch_to_window(tab_origin.clone()).await;
+            let _ = driver
+                .screenshot(&Path::new(&"config/seofast/screenshot/w-newmode1.png"))
+                .await;
+            let res_views = driver
+                .find(By::Id(format!("res_views{}", id_yt)))
+                .await
+                .unwrap();
+            let tmr_elem = res_views.wait_element(By::Id(&tmr_id), 5).await;
+            if let Err(_) = tmr_elem {
+                let _ = driver.switch_to_window(tab_video.clone()).await;
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                let _ = driver
+                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
                     .await;
+                return TaskResult::CONTINUE;
+            }
+
+            let mut tmr: i32 = tmr_elem.unwrap().text().await.unwrap().parse().unwrap();
+
+            while tmr > 0 {
+                p.tmr("YOUTUBE", &tmr.to_string()).await;
+
+                let tmr_elem = res_views.find(By::Id(&tmr_id)).await;
+                if let Err(_) = tmr_elem.as_ref() {
+                    break;
+                }
+
+                if let Ok(txt) = tmr_elem.unwrap().text().await {
+                    if !txt.is_empty() {
+                        tmr = txt.parse().unwrap();
+                    } else {
+                        tmr = 0;
+                    }
+                }
+            }
+
+            let _ = driver
+                .screenshot(&Path::new(&"config/seofast/screenshot/w-newmode2.png"))
+                .await;
+
+            let button_purple = res_views
+                .wait_element(By::ClassName("sf_button_purple"), 5)
+                .await;
+            Log::debug(
+                "TaskDriverSeofast->YOUTUBE",
+                &format!("button_purple\n{:#?}", button_purple),
+            )
+            .await;
+            if let Err(e) = button_purple.as_ref() {
+                Log::error(
+                    "TaskDriverSeofast->YOUTUBE",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                let _ = driver.switch_to_window(tab_video.clone()).await;
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                let _ = driver
+                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                    .await;
+                return TaskResult::CONTINUE;
+            }
+
+            let _ = button_purple.unwrap().click().await;
+
+            let _ = driver
+                .screenshot(&Path::new(&"config/seofast/screenshot/w-newmode3.png"))
+                .await;
+
+            let span = res_views.wait_element(By::Tag("span"), 10).await;
+            Log::debug("TaskDriverSeofast->YOUTUBE", &format!("span\n{:#?}", span)).await;
+            if let Err(_) = span {
+                let _ = driver.switch_to_window(tab_video.clone()).await;
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                let _ = driver
+                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                    .await;
+                return TaskResult::CONTINUE;
+            }
+
+            earn = span.unwrap().text().await.unwrap();
+
+            let _ = driver.switch_to_window(tab_video.clone()).await;
+            let _ = driver.close_window().await;
+            let _ = driver.switch_to_window(tab_origin.clone()).await;
+        }
+
+        if !new_mode {
+            let _ = driver.switch_to_window(tab_video.clone()).await;
+
+            let url = driver.current_url().await;
+            if let Err(_) = url {
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                return TaskResult::CONTINUE;
+            }
+
+            if url.unwrap().as_str().contains("video") {
+                let _ = driver
+                    .screenshot(&Path::new(&"config/seofast/screenshot/window_2.png"))
+                    .await;
+                let src = driver.source().await;
+                if let Err(_) = src {
                     let _ = driver.close_window().await;
                     let _ = driver.switch_to_window(tab_origin).await;
-                    let _ = driver
-                        .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                        .await;
                     return TaskResult::CONTINUE;
                 }
+                Log::debug(
+                    "TaskDriverSeofast->YOUTUBE",
+                    &format!("line:{}\n{}", line!(), src.unwrap()),
+                )
+                .await;
+            }
+
+            if let Err(_) = driver.wait_element(By::Id("timer-tr-block"), 10).await {
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                let _ = driver
+                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                    .await;
+                return TaskResult::CONTINUE;
             };
 
             //stage 1
-            let iframe = match driver.wait_element(By::Tag("iframe"), 5).await {
-                Ok(elem) => elem,
-                Err(e) => {
-                    Log::error(
-                        "TaskDriverSeofast->YOUTUBE",
-                        &format!("iframe youtube not found\n{}", e),
-                    )
-                    .await;
-                    let _ = driver.close_window().await;
-                    let _ = driver.switch_to_window(tab_origin).await;
-                    return TaskResult::CONTINUE;
-                }
-            };
+            let iframe = driver.wait_element(By::Tag("iframe"), 5).await;
+            if let Err(e) = iframe {
+                Log::error(
+                    "TaskDriverSeofast->YOUTUBE",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                return TaskResult::CONTINUE;
+            }
 
-            let _ = iframe.enter_frame().await;
+            let _ = iframe.unwrap().enter_frame().await;
 
-            let ytplay = match driver
+            let ytplay = driver
                 .wait_element(By::ClassName("ytp-large-play-button"), 5)
-                .await
-            {
-                Ok(elem) => elem,
-                Err(e) => {
-                    Log::error(
-                        "TaskDriverSeofast->YOUTUBE",
-                        &format!("ytbutton not found\n{}", e),
-                    )
-                    .await;
-                    return TaskResult::CRITICAL;
-                }
-            };
+                .await;
+            if let Err(e) = ytplay.as_ref() {
+                Log::error(
+                    "TaskDriverSeofast->YOUTUBE",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                return TaskResult::CRITICAL;
+            }
 
-            if let Ok(b) = ytplay.is_displayed().await {
+            if let Ok(b) = ytplay.as_ref().unwrap().is_displayed().await {
                 if !b {
                     Log::info("TaskDriverSeofast->YOUTUBE", "ytbutton not displayed").await;
                     let _ = driver.close_window().await;
@@ -669,35 +604,21 @@ impl TaskDriverSeofast {
                         .await;
                     return TaskResult::CONTINUE;
                 }
-                let _ = ytplay.click().await;
+                let _ = ytplay.unwrap().click().await;
                 let _ = driver.enter_default_frame().await;
             }
 
-            let mut tmr = match driver.find(By::Id("timer-tr-block")).await {
-                Ok(time) => match time.find(By::Id("tmr")).await {
-                    Ok(tmr) => match tmr.text().await {
-                        Ok(txt) => txt.parse::<i32>().unwrap(),
-                        Err(_) => {
-                            let _ = driver.close_window().await;
-                            let _ = driver.switch_to_window(tab_origin).await;
-                            return TaskResult::CONTINUE;
-                        }
-                    },
-                    Err(_) => {
-                        let _ = driver.close_window().await;
-                        let _ = driver.switch_to_window(tab_origin).await;
-                        return TaskResult::CONTINUE;
-                    }
-                },
-                Err(_) => {
-                    let _ = driver.close_window().await;
-                    let _ = driver.switch_to_window(tab_origin).await;
-                    let _ = driver
-                        .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                        .await;
-                    return TaskResult::CONTINUE;
-                }
-            };
+            let tmr = driver.find(By::Id(&tmr_id)).await;
+            if let Err(_) = tmr {
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                let _ = driver
+                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                    .await;
+                return TaskResult::CONTINUE;
+            }
+
+            let mut tmr: i32 = tmr.unwrap().text().await.unwrap().parse().unwrap();
 
             if tmr > 600 {
                 let _ = driver.close_window().await;
@@ -746,75 +667,84 @@ impl TaskDriverSeofast {
                     }
                 }
 
-                tmr = match driver.find(By::Id("timer-tr-block")).await {
-                    Ok(time) => match time.find(By::Id("tmr")).await {
-                        Ok(tmr) => match tmr.text().await {
-                            Ok(txt) => {
-                                if !txt.is_empty() {
-                                    let n = txt.parse::<i32>().unwrap();
-                                    n
-                                } else {
-                                    0
-                                }
-                            }
-                            Err(_) => {
-                                let _ = driver.close_window().await;
-                                let _ = driver.switch_to_window(tab_origin).await;
-                                return TaskResult::CONTINUE;
-                            }
-                        },
-                        Err(_) => {
-                            let _ = driver.close_window().await;
-                            let _ = driver.switch_to_window(tab_origin).await;
-                            return TaskResult::CONTINUE;
-                        }
-                    },
-                    Err(_) => {
-                        let _ = driver.close_window().await;
-                        let _ = driver.switch_to_window(tab_origin).await;
-                        let _ = driver
-                            .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                            .await;
-                        return TaskResult::CONTINUE;
-                    }
+                let tmr_elem = driver.find(By::Id(&tmr_id)).await;
+                if let Err(_) = tmr_elem {
+                    let _ = driver.close_window().await;
+                    let _ = driver.switch_to_window(tab_origin).await;
+                    let _ = driver
+                        .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                        .await;
+                    return TaskResult::CONTINUE;
+                }
+                tmr = match tmr_elem.as_ref().unwrap().text().await.unwrap().is_empty() {
+                    true => 0,
+                    false => tmr_elem.unwrap().text().await.unwrap().parse().unwrap(),
                 };
             }
 
-            // if task_type == VideoType::RARE {
-            //     let succes_error = match driver.wait_element(By::Id("succes-error"), 5).await {
-            //         Ok(elem) => elem,
-            //         Err(e) => {
-            //             Log::error(
-            //                 "TaskDriverSeofast->YOUTUBE",
-            //                 &format!("RARE\nsucces-error not found\n{}", e),
-            //             )
-            //             .await;
-            //             let _ = driver.close_window().await;
-            //             let _ = driver.switch_to_window(tab_origin).await;
-            //             let _ = driver
-            //                 .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-            //                 .await;
-            //             return TaskResult::CONTINUE;
-            //         }
-            //     };
+            let succes_error = driver.wait_element(By::Id("succes-error"), 5).await;
+            if let Err(e) = succes_error {
+                Log::error(
+                    "TaskDriverSeofast->YOUTUBE",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                let _ = driver
+                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                    .await;
+                return TaskResult::CONTINUE;
+            }
 
-            //     let _ = match succes_error.wait_element(By::Tag("a"), 10).await {
-            //         Ok(elem) => elem.click().await,
-            //         Err(_) => {
-            //             Log::error("TaskDriverSeofast->YOUTUBE", "tag a not found").await;
-            //             let _ = driver.close_window().await;
-            //             let _ = driver.switch_to_window(tab_origin).await;
-            //             return TaskResult::CONTINUE;
-            //         }
-            //     };
-            // }
+            let span = succes_error
+                .unwrap()
+                .wait_element(By::Tag("span"), 10)
+                .await;
+            if let Err(_) = span {
+                let _ = driver.close_window().await;
+                let _ = driver.switch_to_window(tab_origin).await;
+                let _ = driver
+                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                    .await;
+                return TaskResult::CONTINUE;
+            }
 
-            let succes_error = match driver.wait_element(By::Id("succes-error"), 5).await {
-                Ok(elem) => elem,
-                Err(e) => {
+            earn = span.unwrap().text().await.unwrap();
+
+            if earn.contains("YouTube") {
+                //stage 2
+                let mut stage_error = 0;
+                let mut stage_old = 0;
+                loop {
+                    if let Ok(stage) = driver.execute("return stage;", Vec::new()).await {
+                        let stage: String = stage.convert().unwrap();
+                        let stage: i32 = stage.parse().unwrap();
+                        if stage != stage_old {
+                            stage_old = stage;
+                            stage_error = 0;
+                        }
+                        if stage == stage_old {
+                            stage_error += 1;
+                            if stage_error == 2000 {
+                                let _ = driver.close_window().await;
+                                let _ = driver.switch_to_window(tab_origin).await;
+                                let _ = driver
+                                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                                    .await;
+                                return TaskResult::CRITICAL;
+                            }
+                        }
+                        if stage != 1 {
+                            break;
+                        }
+                    }
+                }
+                let iframe = driver.wait_element(By::Tag("iframe"), 10).await;
+                if let Err(e) = iframe {
                     Log::error(
                         "TaskDriverSeofast->YOUTUBE",
-                        &format!("line:{}\nsuccess-error not found\n{}", line!(), e),
+                        &format!("line:{}\n{}", line!(), e),
                     )
                     .await;
                     let _ = driver.close_window().await;
@@ -824,11 +754,18 @@ impl TaskDriverSeofast {
                         .await;
                     return TaskResult::CONTINUE;
                 }
-            };
 
-            let span = match succes_error.wait_element(By::Tag("span"), 10).await {
-                Ok(elem) => elem,
-                Err(_) => {
+                let _ = iframe.unwrap().enter_frame().await;
+
+                let ytplay2 = driver
+                    .wait_element(By::ClassName("ytp-large-play-button"), 5)
+                    .await;
+                if let Err(e) = ytplay2 {
+                    Log::error(
+                        "TaskDriverSeofast->YOUTUBE",
+                        &format!("line:{}\n{}", line!(), e),
+                    )
+                    .await;
                     let _ = driver.close_window().await;
                     let _ = driver.switch_to_window(tab_origin).await;
                     let _ = driver
@@ -836,29 +773,39 @@ impl TaskDriverSeofast {
                         .await;
                     return TaskResult::CONTINUE;
                 }
-            };
 
-            let money = span.text().await.unwrap();
-            if !money.contains("YouTube") {
-                p.earn(&money).await;
-                let _ = driver.close_window().await;
-                let _ = driver.switch_to_window(tab_origin).await;
-                return TaskResult::OK;
-            }
-            //stage 2
-            let mut stage_error = 0;
-            let mut stage_old = 0;
-            loop {
-                if let Ok(stage) = driver.execute("return stage;", Vec::new()).await {
-                    let stage: String = stage.convert().unwrap();
-                    let stage: i32 = stage.parse().unwrap();
-                    if stage != stage_old {
-                        stage_old = stage;
-                        stage_error = 0;
+                let _ = ytplay2.unwrap().click().await;
+                let _ = driver.enter_default_frame().await;
+
+                let tmr_elem = driver.find(By::Id(&tmr_id)).await;
+                if let Err(e) = tmr_elem {
+                    Log::error(
+                        "TaskDriverSeofast->YOUTUBE",
+                        &format!("line:{}\n{}", line!(), e),
+                    )
+                    .await;
+                    let _ = driver.close_window().await;
+                    let _ = driver.switch_to_window(tab_origin).await;
+                    let _ = driver
+                        .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
+                        .await;
+                    return TaskResult::CONTINUE;
+                }
+
+                let mut tmr: i32 = tmr_elem.unwrap().text().await.unwrap().parse().unwrap();
+
+                let mut tmr_error = 0;
+                let mut tmr_old = 0;
+                while tmr > 0 {
+                    p.tmr("YOUTUBE", &tmr.to_string()).await;
+                    io::stdout().flush().unwrap();
+                    if tmr != tmr_old {
+                        tmr_old = tmr;
+                        tmr_error = 0;
                     }
-                    if stage == stage_old {
-                        stage_error += 1;
-                        if stage_error == 2000 {
+                    if tmr == tmr_old {
+                        tmr_error += 1;
+                        if tmr_error == 2000 {
                             let _ = driver.close_window().await;
                             let _ = driver.switch_to_window(tab_origin).await;
                             let _ = driver
@@ -867,62 +814,8 @@ impl TaskDriverSeofast {
                             return TaskResult::CRITICAL;
                         }
                     }
-                    if stage != 1 {
-                        break;
-                    }
-                }
-            }
-            let iframe = match driver.wait_element(By::Tag("iframe"), 10).await {
-                Ok(iframe) => iframe,
-                Err(e) => {
-                    Log::error(
-                        "TaskDriverSeofast->YOUTUBE",
-                        &format!("iframe youtube not found\n{}", e),
-                    )
-                    .await;
-                    let _ = driver.close_window().await;
-                    let _ = driver.switch_to_window(tab_origin).await;
-                    let _ = driver
-                        .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                        .await;
-                    return TaskResult::CONTINUE;
-                }
-            };
-            let _ = iframe.enter_frame().await;
-
-            let ytplay2 = match driver
-                .wait_element(By::ClassName("ytp-large-play-button"), 5)
-                .await
-            {
-                Ok(elem) => elem,
-                Err(e) => {
-                    Log::error(
-                        "TaskDriverSeofast->YOUTUBE",
-                        &format!("stage 2\nytbutton not clicked\n{}", e),
-                    )
-                    .await;
-                    let _ = driver.close_window().await;
-                    let _ = driver.switch_to_window(tab_origin).await;
-                    let _ = driver
-                        .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                        .await;
-                    return TaskResult::CONTINUE;
-                }
-            };
-            let _ = ytplay2.click().await;
-            let _ = driver.enter_default_frame().await;
-
-            let mut tmr = match driver.find(By::Id("timer-tr-block")).await {
-                Ok(time) => match time.find(By::Id("tmr")).await {
-                    Ok(tmr) => match tmr.text().await {
-                        Ok(txt) => txt.parse::<i32>().unwrap(),
-                        Err(_) => {
-                            let _ = driver.close_window().await;
-                            let _ = driver.switch_to_window(tab_origin).await;
-                            return TaskResult::CONTINUE;
-                        }
-                    },
-                    Err(_) => {
+                    let tmr_elem = driver.find(By::Id(&tmr_id)).await;
+                    if let Err(_) = tmr_elem {
                         let _ = driver.close_window().await;
                         let _ = driver.switch_to_window(tab_origin).await;
                         let _ = driver
@@ -930,83 +823,15 @@ impl TaskDriverSeofast {
                             .await;
                         return TaskResult::CONTINUE;
                     }
-                },
-                Err(e) => {
-                    Log::error(
-                        "TaskDriverSeofast->YOUTUBE",
-                        &format!("tmr not found\n{}", e),
-                    )
-                    .await;
-                    let _ = driver.close_window().await;
-                    let _ = driver.switch_to_window(tab_origin).await;
-                    let _ = driver
-                        .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                        .await;
-                    return TaskResult::CONTINUE;
-                }
-            };
-            let mut tmr_error = 0;
-            let mut tmr_old = 0;
-            while tmr > 0 {
-                p.tmr("YOUTUBE", &tmr.to_string()).await;
-                io::stdout().flush().unwrap();
-                if tmr != tmr_old {
-                    tmr_old = tmr;
-                    tmr_error = 0;
-                }
-                if tmr == tmr_old {
-                    tmr_error += 1;
-                    if tmr_error == 2000 {
-                        let _ = driver.close_window().await;
-                        let _ = driver.switch_to_window(tab_origin).await;
-                        let _ = driver
-                            .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                            .await;
-                        return TaskResult::CRITICAL;
-                    }
-                }
-                tmr = match driver.find(By::Id("timer-tr-block")).await {
-                    Ok(time) => match time.find(By::Id("tmr")).await {
-                        Ok(tmr) => match tmr.text().await {
-                            Ok(txt) => {
-                                if !txt.is_empty() {
-                                    txt.parse::<i32>().unwrap()
-                                } else {
-                                    0
-                                }
-                            }
-                            Err(_) => {
-                                let _ = driver.close_window().await;
-                                let _ = driver.switch_to_window(tab_origin).await;
-                                let _ = driver
-                                    .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                                    .await;
-                                return TaskResult::CONTINUE;
-                            }
-                        },
-                        Err(_) => {
-                            let _ = driver.close_window().await;
-                            let _ = driver.switch_to_window(tab_origin).await;
-                            let _ = driver
-                                .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                                .await;
-                            return TaskResult::CONTINUE;
-                        }
-                    },
-                    Err(_) => {
-                        let _ = driver.close_window().await;
-                        let _ = driver.switch_to_window(tab_origin).await;
-                        let _ = driver
-                            .execute(format!("st_view_youtube('{}');", id_yt), Vec::new())
-                            .await;
-                        return TaskResult::CONTINUE;
-                    }
-                };
-            }
 
-            let succes_error = match driver.wait_element(By::Id("succes-error"), 5).await {
-                Ok(elem) => elem,
-                Err(e) => {
+                    tmr = match tmr_elem.as_ref().unwrap().text().await.unwrap().is_empty() {
+                        true => 0,
+                        false => tmr_elem.unwrap().text().await.unwrap().parse().unwrap(),
+                    };
+                }
+
+                let succes_error = driver.wait_element(By::Id("succes-error"), 5).await;
+                if let Err(e) = succes_error {
                     Log::error(
                         "TaskDriverSeofast->YOUTUBE",
                         &format!("line:{}\n{}", line!(), e),
@@ -1019,11 +844,12 @@ impl TaskDriverSeofast {
                         .await;
                     return TaskResult::CONTINUE;
                 }
-            };
 
-            let span2 = match succes_error.wait_element(By::Tag("span"), 10).await {
-                Ok(elem) => elem,
-                Err(e) => {
+                let span2 = succes_error
+                    .unwrap()
+                    .wait_element(By::Tag("span"), 10)
+                    .await;
+                if let Err(e) = span2 {
                     Log::error(
                         "TaskDriverSeofast->YOUTUBE",
                         &format!("line:{}\n{}", line!(), e),
@@ -1036,16 +862,14 @@ impl TaskDriverSeofast {
                         .await;
                     return TaskResult::CONTINUE;
                 }
-            };
-            let earn = span2.text().await.unwrap();
-            p.earn(&earn).await;
+                earn = span2.unwrap().text().await.unwrap();
+            }
             let _ = driver.close_window().await;
             let _ = driver.switch_to_window(tab_origin).await;
-            return TaskResult::OK;
-        } else {
-            //new mode exec
-            todo!()
         }
+
+        p.earn(&earn).await;
+        return TaskResult::OK;
     }
 
     #[allow(dead_code)]
@@ -1063,79 +887,56 @@ impl TaskControlSeofast {
             loop {
                 if GLOBAL_CONTROL.load(Ordering::Relaxed) {
                     let _ = cmdriver.kill().unwrap();
-                    //software_status(Status::STOP, Mode::SOFTWARE).await;
                     break;
                 }
                 sleep(Duration::from_secs(1)).await;
             }
         });
+
         sleep(Duration::from_millis(500)).await;
+
         let user_task = TaskDriverSeofast { headless };
 
         let mut task_number = 1;
         loop {
             if GLOBAL_CONTROL.load(Ordering::Relaxed) {
-                //exit(0);
                 return ();
             }
 
-            match user_task.clone().login().await {
-                Ok(driver) => loop {
-                    if GLOBAL_CONTROL.load(Ordering::Relaxed) {
-                        //exit(0);
-                        return ();
+            let result_user_task = user_task.clone().login().await;
+            if let Err(e) = result_user_task {
+                Log::error(
+                    "TaskControlSeofast->YOUTUBE",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                continue;
+            }
+
+            let driver = result_user_task.unwrap();
+
+            loop {
+                if GLOBAL_CONTROL.load(Ordering::Relaxed) {
+                    return ();
+                }
+                let youtube =
+                    TaskDriverSeofast::youtube(driver.clone(), &task_number.to_string()).await;
+                match youtube {
+                    TaskResult::CONTINUE => continue,
+                    TaskResult::PAUSE => {
+                        let _ = driver.clone().quit().await;
+                        Print::pause().await;
+                        break;
                     }
-                    let youtube =
-                        TaskDriverSeofast::youtube(driver.clone(), &task_number.to_string()).await;
-                    match youtube {
-                        TaskResult::CONTINUE => continue,
-                        TaskResult::PAUSE => {
-                            Print::pause().await;
-                            break;
-                        }
-                        TaskResult::OK => {
-                            task_number += 1;
-                            continue;
-                        }
-                        TaskResult::LOGIN_ERROR => {
-                            let _ = driver.clone().quit().await;
-                            break;
-                        }
-                        TaskResult::CRITICAL => {
-                            let _ = driver.clone().quit().await;
-                            break;
-                        }
-                        TaskResult::QUIT => break,
+                    TaskResult::OK => {
+                        task_number += 1;
+                        continue;
                     }
-                },
-                Err(e) => {
-                    match e.as_inner() {
-                        WebDriverErrorInner::NoSuchElement(e) => {
-                            Log::error("TaskControlSeofast->YOUTUBE", &format!("{}", e)).await;
-                            //return ();
-                            continue;
-                        }
-                        WebDriverErrorInner::Timeout(e) => {
-                            Log::error("TaskControlSeofast->YOUTUBE", &format!("{}", e)).await;
-                            //return ();
-                            continue;
-                        }
-                        WebDriverErrorInner::WebDriverTimeout(e) => {
-                            Log::error("TaskControlSeofast->YOUTUBE", &format!("{}", e)).await;
-                            //return ();
-                            continue;
-                        }
-                        WebDriverErrorInner::InvalidCookieDomain(e) => {
-                            Log::error("TaskControlSeofast->YOUTUBE", &format!("{}", e)).await;
-                            //return ();
-                            continue;
-                        }
-                        _ => {
-                            Log::error("TaskControlSeofast->YOUTUBE", &format!("{}", e)).await;
-                            //return ();
-                            break;
-                        }
+                    TaskResult::CRITICAL => {
+                        let _ = driver.clone().quit().await;
+                        break;
                     }
+                    TaskResult::QUIT => break,
                 }
             }
         }
@@ -1159,9 +960,8 @@ pub struct ThreadTaskSeofast {
 impl ThreadTaskSeofast {
     pub async fn youtube(self) {
         spawn(async move {
-            match ctrl_c().await {
-                Ok(()) => GLOBAL_CONTROL.store(true, Ordering::SeqCst),
-                Err(e) => eprintln!("{}", e),
+            if let Ok(_) = ctrl_c().await {
+                GLOBAL_CONTROL.store(true, Ordering::SeqCst)
             }
         });
         let th = spawn(async move { TaskControlSeofast::youtube(self.headless).await });
