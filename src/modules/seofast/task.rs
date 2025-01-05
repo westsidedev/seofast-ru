@@ -284,6 +284,19 @@ impl TaskDriverSeofast {
                     sleep(Duration::from_secs(1)).await;
                 }
             }
+
+            if let Ok(_) = elem_trash.find(By::ClassName("youtube_c")).await {
+                if let Some(txt) = elem_trash.id().await.unwrap() {
+                    let id_trash = txt.replace("youtube_v", "");
+                    let _ = driver
+                        .execute(
+                            format!("st_task_youtube('{}', '3');", &id_trash),
+                            Vec::new(),
+                        )
+                        .await;
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
         }
 
         let tr_title = list_tr.as_ref().unwrap()[0].text().await.unwrap();
@@ -295,9 +308,7 @@ impl TaskDriverSeofast {
             id_yt = id;
         }
 
-        if tr_title.contains("Оставить комментарий") {
-            return TaskResult::CONTINUE;
-        } else if tr_title.contains("Rutube") {
+        if tr_title.contains("Rutube") {
             let _ = driver
                 .execute(format!("st_view_youtube('{}');", &id_yt), Vec::new())
                 .await;
@@ -390,6 +401,9 @@ impl TaskDriverSeofast {
             };
 
             let a = popup.find_all(By::Tag("a")).await.unwrap();
+            if a.len() < 1 {
+                return TaskResult::CONTINUE;
+            }
             let _ = a[1].click().await;
             let sf_button_red = driver
                 .wait_elements(By::ClassName("sf_button_red"), 15)
