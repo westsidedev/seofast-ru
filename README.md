@@ -34,8 +34,8 @@ mkdir seofast
 mv seofast-linux.zip seofast
 cd seofast
 unzip seofast-linux.zip
-chmod +x aviso-bz
-./aviso-bz
+chmod +x seofast-ru
+./seofast-ru
 ```
 
 + **Termux**
@@ -53,8 +53,8 @@ mkdir seofast
 mv seofast-termux.zip seofast
 cd seofast
 unzip seofast-termux.zip
-chmod +x aviso-bz
-./aviso-bz
+chmod +x seofast-ru
+./seofast-ru
 ```
   
 <h2>BUILD:</h2>
