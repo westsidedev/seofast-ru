@@ -9,21 +9,53 @@
 
 + **Linux** *(requires Ubuntu 24 or GLIBC_2.39)*
 
-Make sure the browser and driver binaries are located in /bin, the software will look for them in this location. The browser name must only match its name, otherwise you must rename it, the software only supports the brave browser, if you don't have it on your machine you must install it.
+  Make sure the browser and driver binaries are located in /bin, the software will look for them in this location. The browser name must only match its name, otherwise you must rename it, the software only supports the brave browser, if you don't have it on your machine you must install it.
 
-Ex: *brave-browser* for *brave* only
+  Ex: *brave-browser* for *brave* only
 
-```bash
-curl https://pastecode.x10.mx | bash -s -- --linux 
-```
+**Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
+
 + **Termux** *(arm64)*
 
-```bash
-curl https://pastecode.x10.mx | bash -s -- --termux
-```
+**Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
+
 + **Windows**
 
   **Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
+
+<h2>INSTALATION:</h2>
+
+After downloading, create a folder and extract the zip inside it, then give it permission, in termux you must put it in your HOME
+
++ **Linux**
+
+```bash
+mkdir seofast
+mv seofast-linux.zip seofast
+cd seofast
+unzip seofast-linux.zip
+chmod +x aviso-bz
+./aviso-bz
+```
+
++ **Termux**
+
+```bash
+pkg update 
+pkg upgrade 
+pkg install x11-repo 
+pkg install tur-repo 
+pkg install chromium
+pkg install zip
+termux-setup-storage
+mv /sdcard/Download/seofast-termux.zip $HOME
+mkdir seofast
+mv seofast-termux.zip seofast
+cd seofast
+unzip seofast-termux.zip
+chmod +x aviso-bz
+./aviso-bz
+```
   
 <h2>BUILD:</h2>
 
