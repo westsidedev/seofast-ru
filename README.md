@@ -13,11 +13,11 @@
 
   Ex: *brave-browser* for *brave* only
 
-**Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
+  **Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
 
 + **Termux** *(arm64)*
 
-**Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
+  **Go to the release page, or click [here](https://github.com/westsidedev/seofast-ru/releases)**
 
 + **Windows**
 
