@@ -14,13 +14,13 @@ impl Colors {
     pub async fn new() -> Colors {
         Colors {
             CLOSE: "\x1b[m".to_string(),
-            CIAN: "\x1b[01;36m".to_string(),
-            BLUE: "\x1b[01;34m".to_string(),
-            YELLOW: "\x1b[01;33m".to_string(),
-            GREEN: "\x1b[01;32m".to_string(),
-            WHITE: "\x1b[01;37m".to_string(),
-            RED: "\x1b[01;31m".to_string(),
-            PINK: "\x1b[01;35m".to_string(),
+            CIAN: "\x1b[01;96m".to_string(),
+            BLUE: "\x1b[01;94m".to_string(),
+            YELLOW: "\x1b[01;93m".to_string(),
+            GREEN: "\x1b[01;92m".to_string(),
+            WHITE: "\x1b[01;97m".to_string(),
+            RED: "\x1b[01;91m".to_string(),
+            PINK: "\x1b[01;95m".to_string(),
         }
     }
 }
