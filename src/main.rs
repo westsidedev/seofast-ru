@@ -1,6 +1,7 @@
 use std::{env::args, process::exit, sync::atomic::AtomicBool};
 
 use modules::{
+    colors::Colors,
     config::UserData,
     seofast::{Mode, Seofast},
 };
@@ -59,8 +60,9 @@ async fn main() {
 }
 
 async fn msg_help() {
+    let c = Colors::new().await;
     print!("\x1bc");
-    println!("Options:");
+    println!("{}ARGUMENTS:{}", c.WHITE, c.CLOSE);
     println!(" --email      Email used for login in seofast");
     println!(" --passw      Password used for login in seofast");
     println!(" --start      Start software after first execution");
@@ -68,11 +70,14 @@ async fn msg_help() {
     println!(" --help       Show this message");
     println!(" --YT         Youtube mode");
     println!(" --SF         Surfing mode");
-    println!(" --All        Youtube and surfing mode\n");
-    println!("Example:");
-    println!("STEP 1 [FIRST EXEC]:");
+    println!(" --All        Youtube and surfing mode");
+    println!();
+    println!("{}USAGE:{}", c.WHITE, c.CLOSE);
     println!(" ./seofast-ru --email xxxx@xxxx --passw 123456 --YT --headless");
-    println!("STEP 2 [START]:");
     println!(" ./seofast-ru --start --YT --headless");
+    println!();
+    println!("{}TELEGRAM:{}", c.WHITE, c.CLOSE);
+    println!("Channel: https://t.me/earn_scripts");
+    println!("Group: https://t.me/earn_scripts_group");
     exit(0);
 }
