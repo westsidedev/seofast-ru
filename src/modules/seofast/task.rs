@@ -724,7 +724,9 @@ impl TaskDriverSeofast {
                 return TaskResult::CONTINUE;
             }
 
-            earn = span.unwrap().text().await.unwrap();
+            if let Ok(txt) = span.unwrap().text().await {
+                earn = txt;
+            }
 
             if earn.contains("YouTube") {
                 //stage 2
@@ -880,6 +882,10 @@ impl TaskDriverSeofast {
             }
             let _ = driver.close_window().await;
             let _ = driver.switch_to_window(tab_origin).await;
+        }
+
+        if earn.is_empty() {
+            return TaskResult::CONTINUE;
         }
 
         p.earn(&earn).await;
