@@ -61,6 +61,7 @@ async fn main() {
 
 async fn msg_help() {
     let c = Colors::new().await;
+    let version: &str = env!("CARGO_PKG_VERSION");
     print!("\x1bc");
     println!("{}ARGUMENTS:{}", c.WHITE, c.CLOSE);
     println!(" --email      Email used for login in seofast");
@@ -79,5 +80,7 @@ async fn msg_help() {
     println!("{}TELEGRAM:{}", c.WHITE, c.CLOSE);
     println!("Channel: https://t.me/earn_scripts");
     println!("Group: https://t.me/earn_scripts_group");
+    println!();
+    println!("{}VERSION:{}{}", c.WHITE, c.CLOSE, version);
     exit(0);
 }
