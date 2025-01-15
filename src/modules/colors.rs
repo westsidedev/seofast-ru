@@ -15,7 +15,7 @@ impl Colors {
         Colors {
             CLOSE: "\x1b[m".to_string(),
             CIAN: "\x1b[01;96m".to_string(),
-            BLUE: "\x1b[01;94m".to_string(),
+            BLUE: "\x1b[01;34m".to_string(),
             YELLOW: "\x1b[01;93m".to_string(),
             GREEN: "\x1b[01;92m".to_string(),
             WHITE: "\x1b[01;97m".to_string(),
