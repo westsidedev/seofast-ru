@@ -27,10 +27,7 @@ impl Seofast {
     pub async fn start(mode: Mode, headless: bool) {
         let colors = Colors::new().await;
         print!("\x1bc");
-        print!(
-            "{}[{}SEOFAST{}]\n",
-            colors.WHITE, colors.GREEN, colors.WHITE
-        );
+        print!("{}[{}SEOFAST{}]\n", colors.BLUE, colors.YELLOW, colors.BLUE);
         stdout().flush().unwrap();
         let thread = ThreadTaskSeofast { headless };
         match mode {
@@ -53,22 +50,22 @@ impl Print {
         let colors = Colors::new().await;
         print!(
             "\r\x1b[K{}[{}{}{}][{}{}{}|{}{}{}|{}{:.2}{}][{}{}{}]",
-            colors.WHITE,
+            colors.BLUE,
             colors.GREEN,
             &self.task,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &self.username.to_uppercase(),
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &self.classification,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &self.money,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.CIAN,
             time_now(Sao_Paulo).await,
-            colors.WHITE,
+            colors.BLUE,
         );
         stdout().flush().unwrap();
     }
@@ -77,25 +74,25 @@ impl Print {
         let colors = Colors::new().await;
         print!(
             "\r\x1b[K{}[{}{}{}][{}{}{}|{}{}{}|{}{}{}|{}{}{}][{}{}{}]",
-            colors.WHITE,
+            colors.BLUE,
             colors.GREEN,
             &self.task,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &self.username.to_uppercase(),
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &self.classification,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             mode,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             tmr,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.CIAN,
             time_now(Sao_Paulo).await,
-            colors.WHITE
+            colors.BLUE
         );
         stdout().flush().unwrap();
     }
@@ -106,25 +103,25 @@ impl Print {
         let earn = re.captures(earn).unwrap();
         print!(
             "\r\x1b[K{}[{}{}{}][{}{}{}|{}{}{}|{}{:.2}{}|{}{}{}][{}{}{}]\n",
-            colors.WHITE,
+            colors.BLUE,
             colors.GREEN,
             &self.task,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &self.username.to_uppercase(),
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &self.classification,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &self.money,
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.YELLOW,
             &earn[1],
-            colors.WHITE,
-            colors.GREEN,
+            colors.BLUE,
+            colors.CIAN,
             time_now(Sao_Paulo).await,
-            colors.WHITE
+            colors.BLUE
         );
         stdout().flush().unwrap();
     }
@@ -137,7 +134,7 @@ impl Print {
             }
             print!(
                 "\r\x1b[K{}[{}PAUSED{}]({}{}{})",
-                colors.WHITE, colors.YELLOW, colors.WHITE, colors.YELLOW, i, colors.WHITE
+                colors.BLUE, colors.YELLOW, colors.BLUE, colors.YELLOW, i, colors.BLUE
             );
             stdout().flush().unwrap();
             sleep(Duration::from_secs(1)).await;
