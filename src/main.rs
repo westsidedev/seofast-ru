@@ -3,7 +3,7 @@ use std::{env::args, process::exit, sync::atomic::AtomicBool};
 use modules::{
     colors::Colors,
     config::UserData,
-    seofast::{Mode, Seofast},
+    seofast::{self, Mode},
 };
 
 mod modules;
@@ -37,7 +37,7 @@ async fn main() {
                     headless = true;
                 }
             }
-            Seofast::start(mode, headless).await;
+            seofast::start(mode, headless).await;
         }
         "--start" => {
             let mode = match arg[1].as_str() {
@@ -52,7 +52,7 @@ async fn main() {
                     headless = true;
                 }
             }
-            Seofast::start(mode, headless).await;
+            seofast::start(mode, headless).await;
         }
         "--help" => msg_help().await,
         _ => msg_help().await,
