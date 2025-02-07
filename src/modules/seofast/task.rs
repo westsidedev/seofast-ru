@@ -18,7 +18,7 @@ use crate::{
     GLOBAL_CONTROL,
 };
 
-use super::Print;
+use super::print::{self, Info};
 
 enum TaskResult {
     QUIT,
@@ -203,13 +203,13 @@ impl TaskDriverSeofast {
         let money: f32 = money[1].parse().unwrap();
         let classification = re_classi.captures(&classification).unwrap();
 
-        let p = Print {
+        let info = Info {
             task: task_number.parse().unwrap(),
             username,
             classification: classification[1].to_string(),
             money,
         };
-        p.user().await;
+        print::user(&info).await;
         let tab_origin = driver.window().await.unwrap();
 
         let rek_table = driver.find_all(By::ClassName("list_rek_table")).await;
@@ -369,7 +369,24 @@ impl TaskDriverSeofast {
             if surf_ckick.as_ref().unwrap().len() <= 1 {
                 return TaskResult::CONTINUE;
             }
-            let _ = surf_ckick.unwrap()[1].click().await;
+            let _ = surf_ckick.as_ref().unwrap()[1].click().await;
+            if surf_ckick.as_ref().unwrap()[1]
+                .attr("onclick")
+                .await
+                .unwrap()
+                .unwrap()
+                .contains("start_youtube_view_button")
+            {
+                let _ = surf_ckick.unwrap()[2].click().await;
+            }
+
+            if let Ok(elem) = tr
+                .wait_element(By::ClassName("start_link_youtube"), 3)
+                .await
+            {
+                let _ = elem.click().await;
+            }
+
             let _ = driver
                 .screenshot(&Path::new(&"config/seofast/screenshot/w_oldmode1-ck.png"))
                 .await;
@@ -474,23 +491,25 @@ impl TaskDriverSeofast {
                 return TaskResult::CONTINUE;
             }
 
-            let mut tmr: i32 = tmr_elem.unwrap().text().await.unwrap().parse().unwrap();
+            let tmr: i32 = tmr_elem.unwrap().text().await.unwrap().parse().unwrap();
+            let mut tmr = tmr * 4;
 
             while tmr > 0 {
-                p.tmr("YOUTUBE", &tmr.to_string()).await;
+                print::tmr(&info, "YOUTUBE", &tmr.to_string()).await;
+                sleep(Duration::from_secs(1)).await;
+                tmr -= 1;
+                // let tmr_elem = res_views.find(By::Id(&tmr_id)).await;
+                // if let Err(_) = tmr_elem.as_ref() {
+                //     break;
+                // }
 
-                let tmr_elem = res_views.find(By::Id(&tmr_id)).await;
-                if let Err(_) = tmr_elem.as_ref() {
-                    break;
-                }
-
-                if let Ok(txt) = tmr_elem.unwrap().text().await {
-                    if !txt.is_empty() {
-                        tmr = txt.parse().unwrap();
-                    } else {
-                        tmr = 0;
-                    }
-                }
+                // if let Ok(txt) = tmr_elem.unwrap().text().await {
+                //     if !txt.is_empty() {
+                //         tmr = txt.parse().unwrap();
+                //     } else {
+                //         tmr = 0;
+                //     }
+                // }
             }
 
             let _ = driver
@@ -528,7 +547,12 @@ impl TaskDriverSeofast {
 
             let span = res_views.wait_element(By::Tag("span"), 10).await;
             Log::debug("TaskDriverSeofast->YOUTUBE", &format!("span\n{:#?}", span)).await;
-            if let Err(_) = span {
+            if let Err(e) = span {
+                Log::error(
+                    "TaskDriverSeofast->YOUTUBE",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
                 let _ = driver.switch_to_window(tab_video.clone()).await;
                 let _ = driver.close_window().await;
                 let _ = driver.switch_to_window(tab_origin).await;
@@ -537,6 +561,10 @@ impl TaskDriverSeofast {
                     .await;
                 return TaskResult::CONTINUE;
             }
+
+            let _ = driver
+                .screenshot(&Path::new(&"config/seofast/screenshot/w-newmode4.png"))
+                .await;
 
             earn = span.unwrap().text().await.unwrap();
 
@@ -647,7 +675,7 @@ impl TaskDriverSeofast {
             let mut tmr_old = 0;
 
             while tmr > 0 {
-                p.tmr("YOUTUBE", &tmr.to_string()).await;
+                print::tmr(&info, "YOUTUBE", &tmr.to_string()).await;
                 if let Ok(txt_task) = driver.find(By::Id("text_work")).await {
                     if let Ok(txt) = txt_task.text().await {
                         if txt.contains("Перезапустите воспроизведения видео ↺")
@@ -711,11 +739,29 @@ impl TaskDriverSeofast {
                 return TaskResult::CONTINUE;
             }
 
+            Log::debug(
+                "TaskDriverSeofast->YOUTUBE",
+                &format!(
+                    "line:{}\n{}",
+                    line!(),
+                    succes_error.as_ref().unwrap().outer_html().await.unwrap()
+                ),
+            )
+            .await;
+
             let span = succes_error
                 .unwrap()
                 .wait_element(By::Tag("span"), 10)
                 .await;
-            if let Err(_) = span {
+            if let Err(e) = span {
+                Log::error(
+                    "TaskDriverSeofast->YOUTUBE",
+                    &format!("line:{}\n{}", line!(), e),
+                )
+                .await;
+                let _ = driver
+                    .screenshot(&Path::new(&"config/seofast/screenshot/w-oldmode2F.png"))
+                    .await;
                 let _ = driver.close_window().await;
                 let _ = driver.switch_to_window(tab_origin).await;
                 let _ = driver
@@ -813,7 +859,7 @@ impl TaskDriverSeofast {
                 let mut tmr_error = 0;
                 let mut tmr_old = 0;
                 while tmr > 0 {
-                    p.tmr("YOUTUBE", &tmr.to_string()).await;
+                    print::tmr(&info, "YOUTUBE", &tmr.to_string()).await;
                     io::stdout().flush().unwrap();
                     if tmr != tmr_old {
                         tmr_old = tmr;
@@ -888,7 +934,7 @@ impl TaskDriverSeofast {
             return TaskResult::CONTINUE;
         }
 
-        p.earn(&earn).await;
+        print::earn(&info, &earn).await;
         return TaskResult::OK;
     }
 
@@ -945,7 +991,7 @@ impl TaskControlSeofast {
                     TaskResult::CONTINUE => continue,
                     TaskResult::PAUSE => {
                         let _ = driver.clone().quit().await;
-                        Print::pause().await;
+                        print::pause().await;
                         break;
                     }
                     TaskResult::OK => {
